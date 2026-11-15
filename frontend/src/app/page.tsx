@@ -42,7 +42,9 @@ export default function HomePage() {
   const [query, setQuery] = useState('');
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [pharmacies, setPharmacies] = useState<Pharmacy[]>([]);
-  const [notice, setNotice] = useState('Search the live medicine catalogue or find verified pharmacies near your current location.');
+  const [notice, setNotice] = useState(apiBase
+    ? 'Search the live medicine catalogue or find verified pharmacies near your current location.'
+    : 'The API URL is not configured. Set NEXT_PUBLIC_API_URL for this deployment to connect live services.');
   const [busy, setBusy] = useState(false);
 
   async function searchMedicines(event: FormEvent<HTMLFormElement>) {
