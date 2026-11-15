@@ -4,7 +4,7 @@
 
 ## Scope and evidence
 
-Reviewed the roadmap, application source, manifests, Prisma schema, migration folders, Git history, legal/integration/security/backup notes, deployment configuration and test setup. Ran frontend lint/type-check/build/audit, backend active-entrypoint type-check/build/tests/audit, Prisma validation/generation, a read-only database readiness check, and a local HTTP smoke check of the demo. No production data was changed and no migration was applied. A new GitHub Actions CI workflow is configured but has not yet run on GitHub.
+Reviewed the roadmap, application source, manifests, Prisma schema, migration folders, Git history, legal/integration/security/backup notes, deployment configuration and test setup. Ran frontend lint/type-check/build/audit, backend active-entrypoint type-check/build/tests/audit, Prisma validation/generation, a read-only database readiness check, and a local browser check of the live-service search shell. No production data was changed and no migration was applied. A new GitHub Actions CI workflow is configured but has not yet run on GitHub.
 
 ## Findings
 
@@ -33,5 +33,5 @@ The roadmap has 100 unique continuous task IDs, with **20 checked and 80 pending
 
 ## Four-interface and external service status
 
-Buyer, pharmacy, doctor and admin screens are visible in the interactive demo, but none of the workflows is end-to-end verified. Email, payment, DigiLocker, AI, maps, realtime, background jobs, private storage and pharmacy/doctor verification are not active integrations. See the API/database reports and final production assessment.
+Only live medicine search and verified-pharmacy lookup are presented in the active home page, and neither was connected to a validated production database during this review. Account, pharmacy, doctor and admin workflows remain unavailable. Email, payment, DigiLocker, AI, maps, realtime, background jobs, private storage and pharmacy/doctor verification are not active integrations. See the API/database reports and final production assessment.
 

@@ -9,7 +9,7 @@ DwaaDekho is an early-stage healthcare marketplace project intended to connect m
 - `architecture.md`, `flow.md`, `decisions.md`, `tasks.md` — target design, runtime notes, decisions and 100-task roadmap.
 - `legal/`, `integrations/`, `security/`, `operations/` — review registers and audit reports.
 - `.github/workflows/ci.yml` — pull request/push checks; workflow has not yet run on GitHub.
-- `test-artifacts/` — browser evidence notes; the demo is verified in a local browser, but no screenshot file is committed.
+- `test-artifacts/` — browser evidence notes; the live-service search shell was checked locally, but no screenshot file is committed.
 
 ## Technology and current runtime
 
