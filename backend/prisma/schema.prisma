@@ -1,0 +1,525 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ====================================================================
+// USER & AUTHENTICATION MODELS
+// ====================================================================
+
+enum UserRole {
+  BUYER
+  PHARMACY_OWNER
+  PHARMACY_STAFF
+  DOCTOR
+  ADMIN
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  name           String?
+  phone          String?
+  role           UserRole  @default(BUYER)
+  emailVerified  DateTime?
+  phoneVerified  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  pharmacyProfiles PharmacyProfile[]
+  broadcastRequests BroadcastRequest[] @relation("BroadcastBuyer")
+  reservations     Reservation[] @relation("ReservationBuyer")
+  orders           Order[]      @relation("OrderBuyer")
+  reviews          Review[]     @relation("ReviewBuyer")
+  notifications    Notification[] @relation("NotificationRecipient")
+  prescriptions    Prescription[] @relation("PrescriptionPatient")
+  prescriptionsAsDoctor Prescription[] @relation("PrescriptionDoctor")
+
+  @@index([email])
+  @@index([role])
+}
+
+// ====================================================================
+// MEDICINE & INVENTORY MODELS
+// ====================================================================
+
+model MedicineBrand {
+  id            String      @id @default(uuid())
+  name          String      @unique
+  manufacturer  String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  medicines     Medicine[]
+}
+
+model ActiveIngredient {
+  id        String      @id @default(uuid())
+  name      String
+  category  String?
+  medicines Medicine[]
+}
+
+model MedicineStrength {
+  id        String      @id @default(uuid())
+  amount    String      // e.g., "500"
+  unit      String?     // e.g., "mg", "ml", "g"
+  medicine  Medicine    @relation(fields: [medicineId], references: [id])
+  medicineId String
+}
+
+model DosageForm {
+  id        String      @id @default(uuid())
+  name      String      // e.g., "Tablet", "Capsule", "Syrup", "Injection"
+  description String?
+  medicines Medicine[]
+}
+
+model MedicineCategory {
+  id             String      @id @default(uuid())
+  name           String
+  parentCategory String?
+  medicines      Medicine[]
+}
+
+model Medicine {
+  id                String      @id @default(uuid())
+  name              String
+  genericName       String
+  brand             MedicineBrand?  @relation(fields: [brandId], references: [id])
+  brandId           String?
+  strength          MedicineStrength[]
+  dosageForm        DosageForm      @relation(fields: [dosageFormId], references: [id])
+  dosageFormId      String
+  category          MedicineCategory @relation(fields: [categoryId], references: [id])
+  categoryId        String
+  prescriptionReq   String      // "OTC", "Rx Required", "Verification Needed", "Doctor Consultation Required"
+  cdSCOApproved     Boolean     @default(false)
+  inStock           Boolean     @default(true)
+  composition       String?
+  uses              String?
+  sideEffects       String?
+  safetyAdvice      Json?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  regulatoryRules   RegulatoryRule[]
+  activeIngredients ActiveIngredient[]
+  prescriptions     Prescription[]
+  reservations      Reservation[]
+  orders            Order[]
+  broadcastRequests BroadcastRequest[] @relation("MedicineBroadcasts")
+  pharmacyOffers    PharmacyOffer[] @relation("PharmacyOfferMedicine")
+
+  @@index([name])
+  @@index([genericName])
+  @@index([cdSCOApproved])
+  @@index([prescriptionReq])
+}
+
+model RegulatoryRule {
+  id                String      @id @default(uuid())
+  medicine          Medicine    @relation(fields: [medicineId], references: [id])
+  medicineId        String
+  schedule          String      // e.g., "SCHEDULE_H", "SCHEDULE_H1", "SCHEDULE_X", "SCHEDULE_G", "OVER_THE_COUNTER"
+  maxQuantity       Int?        // Maximum allowed quantity per prescription/transaction
+  prescriptionRequired Boolean
+  expiryDate        DateTime?
+  effectiveDate     DateTime?
+  createdBy         String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([medicineId, schedule])
+  @@index([effectiveDate, expiryDate])
+}
+
+model Prescription {
+  id           String   @id @default(uuid())
+  patientId    String
+  patient      User     @relation("PrescriptionPatient", fields: [patientId], references: [id])
+  doctorId     String?
+  doctor       User?    @relation("PrescriptionDoctor", fields: [doctorId], references: [id])
+  medicineId   String
+  medicine     Medicine @relation(fields: [medicineId], references: [id])
+  documentId   String   @unique
+  documentPath String
+  fileName     String
+  fileType     String
+  fileSize     Int
+  uploadStatus String   @default("pending")
+  status       String   @default("pending")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([patientId, status])
+  @@index([doctorId, status])
+  @@index([medicineId, status])
+}
+
+// ====================================================================
+// PHARMACY MODELS
+// ====================================================================
+
+enum PharmacyVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+  EXPIRED
+}
+
+model PharmacyProfile {
+  id             String      @id @default(uuid())
+  userId         String      @unique
+  user           User        @relation(fields: [userId], references: [id])
+  pharmacyName   String
+  licenseNumber  String?
+  licenseType    String?
+  licenseExpiry  DateTime?
+  address        String
+  latitude       Float
+  longitude      Float
+  phone          String?
+  email          String?
+  isJanAushadhi  Boolean     @default(false)
+  rating         Float       @default(0.0)
+  totalReviews   Int         @default(0)
+  verificationStatus PharmacyVerificationStatus @default(PENDING)
+  isVerified     Boolean     @default(false)
+  isOpen         Boolean     @default(true)
+  serviceAreaKm  Int         @default(5)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  pharmacyOffers    PharmacyOffer[]  @relation("OfferPharmacy")
+  reservations      Reservation[]    @relation("ReservationPharmacy")
+  orders            Order[]          @relation("OrderPharmacy")
+  reviews           Review[]         @relation("ReviewPharmacy")
+  recipientRecords  RecipientRecord[] @relation("RecipientPharmacy")
+
+  @@index([verificationStatus])
+  @@index([isVerified])
+  @@index([latitude, longitude])
+}
+
+// ====================================================================
+// BROADCAST & OFFER MODELS
+// ====================================================================
+
+enum BroadcastStatus {
+  DRAFT
+  VALIDATING
+  READY
+  BROADCASTING
+  ACTIVE
+  RESPONSES_RECEIVED
+  NO_ELIGIBLE_PHARMACIES
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum OfferAvailability {
+  FULL_STOCK
+  PARTIAL_STOCK
+  OUT_OF_STOCK
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  RESERVED
+}
+
+model BroadcastRequest {
+  id                  String      @id @default(uuid())
+  buyerId             String
+  buyer               User        @relation("BroadcastBuyer", fields: [buyerId], references: [id])
+  medicineId          String
+  medicine            Medicine    @relation("MedicineBroadcasts", fields: [medicineId], references: [id])
+  dosage              String?
+  quantity            Int
+  locationLat         Float
+  locationLng         Float
+  radiusKm            Int         @default(3)
+  status              BroadcastStatus @default(DRAFT)
+  expiresAt           DateTime
+  prescriptionStatus  String      // "OTC", "Rx Required", "Verification Needed"
+  prescriptionDocumentId String?
+  consentGiven        Boolean     @default(false)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  pharmacyOffers      PharmacyOffer[] @relation("OfferBroadcast")
+  recipientRecords    RecipientRecord[]
+  reservations        Reservation[] @relation("ReservationBroadcast")
+  orders              Order[]      @relation("OrderBroadcast")
+
+  @@index([buyerId, status])
+  @@index([expiresAt])
+  @@index([status, expiresAt])
+}
+
+model PharmacyOffer {
+  id                String      @id @default(uuid())
+  broadcastId       String
+  broadcast         BroadcastRequest @relation("OfferBroadcast", fields: [broadcastId], references: [id])
+  pharmacyId        String
+  pharmacy          PharmacyProfile @relation("OfferPharmacy", fields: [pharmacyId], references: [id])
+  medicineId        String
+  medicine          Medicine    @relation("PharmacyOfferMedicine", fields: [medicineId], references: [id])
+  offerPrice        Decimal     @db.Decimal(10, 2)
+  availability      OfferAvailability
+  confirmedQuantity Int
+  totalQuantity     Int
+  unitPrice         Decimal     @db.Decimal(10, 2)
+  deliveryCharges   Decimal     @db.Decimal(10, 2) @default(0)
+  status            OfferStatus @default(PENDING)
+  responseDeadline  DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  reservations        Reservation[] @relation("ReservationOffer")
+  recipientRecord     RecipientRecord?
+
+  @@index([broadcastId, pharmacyId])
+  @@index([broadcastId, status])
+  @@index([medicineId, status])
+}
+
+// ====================================================================
+// RECIPIENT & DELIVERY MODELS
+// ====================================================================
+
+enum RecipientStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model RecipientRecord {
+  id            String      @id @default(uuid())
+  broadcastId   String
+  broadcast     BroadcastRequest @relation(fields: [broadcastId], references: [id])
+  pharmacyId    String
+  pharmacy      PharmacyProfile @relation("RecipientPharmacy", fields: [pharmacyId], references: [id])
+  distanceKm    Float
+  status        RecipientStatus @default(PENDING)
+  responseTimestamp DateTime?
+  offerId       String? @unique
+  offer         PharmacyOffer? @relation(fields: [offerId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([broadcastId, pharmacyId])
+  @@index([status])
+  @@index([offerId])
+}
+
+// ====================================================================
+// RESERVATION & ORDER MODELS
+// ====================================================================
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  READY_FOR_PICKUP
+  COMPLETED
+  EXPIRED
+  CANCELLED
+  FAILED
+}
+
+enum OrderFulfilmentType {
+  STORE_PICKUP
+  LOCAL_DELIVERY
+}
+
+enum OrderStatus {
+  PLACED
+  CONFIRMED
+  PREPARING
+  READY
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+model Reservation {
+  id                String      @id @default(uuid())
+  buyerId           String
+  buyer             User        @relation("ReservationBuyer", fields: [buyerId], references: [id])
+  pharmacyId        String
+  pharmacy          PharmacyProfile @relation("ReservationPharmacy", fields: [pharmacyId], references: [id])
+  broadcastId       String
+  broadcast         BroadcastRequest @relation("ReservationBroadcast", fields: [broadcastId], references: [id])
+  offerId           String
+  offer             PharmacyOffer @relation("ReservationOffer", fields: [offerId], references: [id])
+  medicineId        String
+  medicine          Medicine    @relation(fields: [medicineId], references: [id])
+  reservedQuantity  Int
+  finalAmount       Decimal     @db.Decimal(10, 2)
+  finalAmountCurrency String    @default("INR")
+  status            ReservationStatus @default(PENDING)
+  pinHash           String      // HMAC digest, never plain PIN
+  pinAttempts       Int         @default(0)
+  maxAttempts       Int         @default(3)
+  expiresAt         DateTime
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  completedAt       DateTime?
+  fulfilFulfilment  OrderFulfilmentType?
+
+  order             Order?
+  reservationAttempts ReservationAttempt[]
+  notifications     Notification[] @relation("NotificationReservation")
+
+  @@index([buyerId, status])
+  @@index([pharmacyId, status])
+  @@index([expiresAt])
+  @@index([status, expiresAt])
+}
+
+model ReservationAttempt {
+  id             String      @id @default(uuid())
+  reservation    Reservation @relation(fields: [reservationId], references: [id])
+  reservationId  String
+  attemptNumber  Int         @default(1)
+  pinEntered     String      // Encrypted/hashed PIN attempt
+  success        Boolean     @default(false)
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime    @default(now())
+
+  @@index([reservationId])
+  @@index([createdAt])
+}
+
+model Order {
+  id                 String      @id @default(uuid())
+  reservationId      String      @unique
+  reservation        Reservation @relation(fields: [reservationId], references: [id])
+  buyerId            String
+  buyer              User        @relation("OrderBuyer", fields: [buyerId], references: [id])
+  pharmacyId         String
+  pharmacy           PharmacyProfile @relation("OrderPharmacy", fields: [pharmacyId], references: [id])
+  broadcastId        String
+  broadcast          BroadcastRequest @relation("OrderBroadcast", fields: [broadcastId], references: [id])
+  medicineId         String
+  medicine           Medicine    @relation(fields: [medicineId], references: [id])
+  fulfilFulfilment   OrderFulfilmentType
+  status             OrderStatus @default(PLACED)
+  finalAmount        Decimal     @db.Decimal(10, 2)
+  finalAmountCurrency String    @default("INR")
+  deliveryAddress    String?
+  deliveryPhone      String?
+  deliveryStatus     String      @default("PENDING")
+  deliveryTrackingId String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  completedAt        DateTime?
+
+  review             Review?
+  notifications      Notification[] @relation("NotificationOrder")
+
+  @@index([buyerId, status])
+  @@index([pharmacyId, status])
+  @@index([reservationId])
+}
+
+// ====================================================================
+// REVIEW & RATING MODELS
+// ====================================================================
+
+enum ReviewStatus {
+  PENDING
+  VERIFIED
+  MODERATED
+  REJECTED
+}
+
+model Review {
+  id             String      @id @default(uuid())
+  orderId        String      @unique
+  order          Order       @relation(fields: [orderId], references: [id])
+  buyerId        String
+  buyer          User        @relation("ReviewBuyer", fields: [buyerId], references: [id])
+  pharmacyId     String
+  pharmacy       PharmacyProfile @relation("ReviewPharmacy", fields: [pharmacyId], references: [id])
+  rating         Int         // 1-5
+  writtenFeedback String?
+  status         ReviewStatus @default(PENDING)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([orderId])
+  @@index([buyerId, pharmacyId])
+  @@index([status])
+}
+
+// ====================================================================
+// NOTIFICATION MODELS
+// ====================================================================
+
+enum NotificationType {
+  OFFER_RECEIVED
+  OFFER_UPDATED
+  OFFER_EXPIRED
+  RESERVATION_CONFIRMED
+  RESERVATION_EXPIRED
+  RESERVATION_CANCELLED
+  ORDER_COMPLETED
+  DELIVERY_STATUS_CHANGED
+  REVIEW_REQUESTED
+  REVIEW_ACCEPTED
+  PHARMACY_REQUEST_RECEIVED
+  PHARMACY_RESPONSE_RECEIVED
+}
+
+model Notification {
+  id             String      @id @default(uuid())
+  recipientId    String
+  recipient      User        @relation("NotificationRecipient", fields: [recipientId], references: [id])
+  recipientType  String      // "buyer" | "pharmacy" | "admin" | "doctor"
+  type           NotificationType
+  title          String
+  message        String
+  read           Boolean     @default(false)
+  relatedEntityId String?     // e.g., reservationId, orderId, broadcastId
+  relatedEntityType String?    // e.g., "reservation" | "order" | "broadcast"
+  reservationId  String?
+  reservation    Reservation? @relation("NotificationReservation", fields: [reservationId], references: [id])
+  orderId        String?
+  order          Order?       @relation("NotificationOrder", fields: [orderId], references: [id])
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([recipientId, read])
+  @@index([createdAt])
+  @@index([type, createdAt])
+}
+
+// ====================================================================
+// IDEMPOTENCY & AUDIT MODELS
+// ====================================================================
+
+model IdempotencyRecord {
+  id             String      @id @default(uuid())
+  key            String      @unique
+  method         String
+  path           String
+  status         Int         // HTTP status code
+  response       Json?
+  createdAt      DateTime    @default(now())
+  expiresAt      DateTime
+
+  @@index([key])
+  @@index([expiresAt])
+}
